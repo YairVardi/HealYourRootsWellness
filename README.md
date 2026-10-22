@@ -1,168 +1,121 @@
-# HealYourRootsWellness Automation Framework
+# HealYourRootsWellness Automation
 
-Java Maven automation framework for `https://healyourrootswellness.com`, organized according to the `FullStackFinalProject` blueprint.
-
-The project is branded in Jenkins and Allure as a Java Selenium automation framework for `HealYourRootsWellness`. It uses TestNG, Page Object Model classes, reusable extensions, XML-backed runtime configuration, and Allure reporting.
-
-Implementation note: the existing browser layer still contains Playwright Java APIs from the previous framework. Selenium and WebDriverManager are already configured in Maven, but a full runtime migration from Playwright Java to Selenium WebDriver is a separate code change.
-
-## Tech Stack
-
-- Java 17
-- Maven
-- TestNG
-- Selenium WebDriver and WebDriverManager
-- Playwright Java legacy browser layer pending migration
-- Rest Assured
-- Appium Java Client
-- AShot
-- Allure TestNG
-
-## Project Structure
-
-```text
-.
-|-- Configuration/
-|   `-- DataConfig.xml
-|-- Drivers/
-|-- ImageRepository/
-|-- src/
-|   |-- main/java/
-|   |   |-- Extensions/
-|   |   |-- Helpers/
-|   |   |-- PageObjects/
-|   |   |-- Utilities/
-|   |   `-- WorkFlows/
-|   `-- test/java/
-|       |-- Helpers/
-|       |-- SanityTest/
-|       `-- Utilities/
-|-- allure-results/
-|-- Jenkinsfile
-|-- pom.xml
-`-- testng.xml
-```
-
-## Configuration
-
-Runtime defaults live in `Configuration/DataConfig.xml`.
-
-Important keys:
-
-- `PlatformName`: defaults to `WEB`
-- `BrowserName`: `chrome` or `firefox` for Jenkins Java Selenium runs. The legacy browser layer still normalizes `chrome` to `chromium` internally.
-- `Headless`: `true` or `false`
-- `url`: web base URL
-- `url_api`: API base URL
-- `DefaultTimeoutMs` and `ExpectTimeoutMs`: UI automation timeouts
-- `UDID`, `AppPackage`, `AppActivity`: mobile placeholders
-- `ElectronDriverPath`, `ElectronAppPath`: Electron placeholders
-- `CalculatorAPP`, `WindowsServer`: desktop placeholders
-
-Java system properties override XML values. Common examples:
-
-```bash
-./mvnw test -DBrowserName=firefox -DHeadless=true -Durl=https://healyourrootswellness.com
-./mvnw test -Dbase.url=https://example.com -Dbrowser=chrome
-```
-
-Environment variables `BASE_URL`, `BROWSER`, `HEADLESS`, `API_URL`, and `PLATFORM_NAME` are also supported by the current framework utilities.
+Python 3.10+ automation for `https://healyourrootswellness.com` using the synchronous Playwright API, pytest, pytest-playwright, Page Objects, requests, Allure and pytest JUnit XML.
 
 ## Setup
 
-Install Java 17+. The Maven wrapper is included, so a local Maven installation is optional.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install --requirement requirements.txt
+python -m playwright install chromium firefox
+```
 
-Selenium WebDriver binaries are handled by WebDriverManager when the Selenium browser layer is used. Until the remaining Playwright Java code is migrated, the legacy browser runtime still needs Playwright browsers installed:
+The dependency versions in `requirements.txt` are pinned. Copy `.env.example` to `.env` only if no local `.env` already exists; never overwrite the existing private file.
+
+## Run
 
 ```bash
-./mvnw exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install"
+# Safe unit tests
+pytest tests/unit
+
+# Collection only
+pytest --collect-only
+
+# Chromium UI suite (headless by default)
+pytest tests/ui --browser chromium
+
+# Firefox UI suite
+pytest tests/ui --browser firefox
+
+# Headed execution and alternate target
+pytest tests/ui --browser chromium --headed --base-url https://healyourrootswellness.com
 ```
 
-For Linux CI agents that need browser system dependencies:
+Every pytest-playwright test receives a new browser context. Failure screenshots and retained traces are written to a timestamped `artifacts/<run-id>/playwright` directory unless `--output` is supplied.
+
+## Reports
+
+Use a unique output directory for each run so stale results cannot be published:
 
 ```bash
-./mvnw exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install --with-deps"
+RUN_ID="local-$(date -u +%Y%m%dT%H%M%SZ)"
+pytest tests \
+  --browser chromium \
+  --output "artifacts/$RUN_ID/playwright" \
+  --junitxml "artifacts/$RUN_ID/junit.xml" \
+  --alluredir "artifacts/$RUN_ID/allure-results" --clean-alluredir
 ```
 
-## Run Commands
+The JUnit XML is suitable for Jenkins and the Jira bridge. Generate or open an Allure report with your installed Allure CLI.
 
-Compile tests without executing them:
+## Configuration
+
+Environment variables override `.env` values. Important settings are `BASE_URL`, `API_BASE_URL`, `BROWSER`, `HEADLESS`, `DEFAULT_TIMEOUT_MS`, `EXPECT_TIMEOUT_MS`, member API settings, and the disabled-by-default destructive investigation settings documented in `.env.example`. `OPENAI_API_KEY` and `OPENAI_MODEL` are optional and are used only when failure analysis is explicitly enabled.
+
+Member registration tests create synthetic accounts and are skipped unless both `RUN_MUTATING_API_TESTS=true` and `MEMBER_TEST_PASSWORD` are set. Consultation submissions are intercepted by Playwright mocks. The delete/deactivate investigation has separate enablement, exact acknowledgement, candidate and account-id guards.
+
+## Test Layout
+
+- `automation/pages`: synchronous Playwright Page Objects and components
+- `automation/mocks.py`: deterministic consultation API routes and captured submissions
+- `automation/api.py`: member clients, assertions, response extraction and guarded registry
+- `tests/ui`: migrated client, therapist, navigation, forms, responsive and security coverage
+- `tests/api`: synthetic member registration, verification and disabled delete investigation
+- `tests/unit`: configuration, API utility and Jira parser/deduplication tests
+- `docs/MIGRATION.md`: Java-to-Python coverage mapping and known selector/xfail inventory
+
+## Jira
+
+The optional Jira bridge reads only final failures/errors from pytest JUnit XML. Dry-run reporting performs no network request:
 
 ```bash
-./mvnw -DskipTests test
+python scripts/jira_sync.py report --reports artifacts/<run-id>/junit.xml
 ```
 
-Run the full sanity suite:
+See `docs/JIRA.md` before using `--apply`. The Jira bridge remains deterministic and does not invoke the failure analyzer.
+
+## Failure Analysis
+
+Failure analysis is a separate, review-only command. It never changes tests or Jira issues and defaults to deterministic offline analysis:
 
 ```bash
-./mvnw test
+python scripts/failure_analysis.py \
+  --report artifacts/<run-id>/junit.xml \
+  --output-dir artifacts/<run-id>/failure-analysis
 ```
 
-Run one TestNG class:
+To opt in to the OpenAI provider, configure both environment variables and add `--use-openai`. No default model is assumed:
 
 ```bash
-./mvnw -Dtest=SanityTest.ClientFlowTest test
-./mvnw -Dtest=SanityTest.NavigationTest test
+export OPENAI_API_KEY='<secret>'
+export OPENAI_MODEL='<model-id>'
+python scripts/failure_analysis.py \
+  --report artifacts/<run-id>/junit.xml \
+  --output-dir artifacts/<run-id>/failure-analysis \
+  --use-openai
 ```
 
-Run headed:
+For a fully offline provider demonstration, use the checked-in synthetic fixtures:
 
 ```bash
-./mvnw test -DHeadless=false
+python scripts/failure_analysis.py \
+  --report artifacts/<run-id>/junit.xml \
+  --output-dir artifacts/<run-id>/failure-analysis \
+  --response-fixture tests/fixtures/failure_analysis/provider_response.json
 ```
 
-Run with an alternate config file:
+The command reads exactly one selected JUnit report. Optional `--diagnostic` inputs must be bounded UTF-8 `.txt` or `.log` files inside that report's build directory. Screenshots, traces and page dumps are not uploaded. Common secrets and personal data are redacted before provider use and artifact generation.
 
-```bash
-./mvnw test -Dconfig.file=Configuration/DataConfig.xml
-```
+Validated `failure-analysis.json` and readable `failure-analysis.md` files are written below the selected build directory. Results are cached by report content, diagnostics, provider/model and prompt version. Use `--force` only for intentional re-analysis. The provider makes at most one request with no SDK retries, a 20-second timeout and a 2,500-token output limit. Without credentials, after provider errors, or after invalid output, deterministic `unknown`/`unexpected_pass` analysis is produced.
 
-## Main Test Suites
+The implementation follows the official OpenAI Python SDK and Responses API structured-output guidance: https://developers.openai.com/api/docs/guides/structured-outputs
 
-- `SanityTest.ClientFlowTest`: patient/client journey and mocked consultation flow
-- `SanityTest.TherapistFlowTest`: clinician journey and dashboard access checks
-- `SanityTest.NavigationTest`: route, header, footer, and HTTP status coverage
-- `SanityTest.FormsValidationTest`: consultation validation and duplicate-submit checks
-- `SanityTest.ResponsiveTest`: mobile/tablet responsive coverage
-- `SanityTest.SecurityBasicTest`: basic HTTPS, payload, and login-error checks
+## Jenkins Inline Pipeline
 
-## Reporting
+Jenkins uses the local `PROJECT_DIR`, defaulting to `/Users/yairvardi/Documents/Automation/HealYourRootsWellness`. The inline pipeline contains no SCM checkout step. It creates `.venv`, installs pinned dependencies and Chromium/Firefox, runs pytest, publishes the current run's JUnit and Allure results, and archives Playwright artifacts.
 
-Surefire XML reports are written to:
+`REPORT_TO_JIRA` is false by default. When enabled after failed tests, Jenkins uses Username/Password credential `jira-aqt` (username: Atlassian email, password: scoped API token). Jira reporting cannot replace the pytest exit status, and it is skipped when setup fails before a current-run JUnit file exists.
 
-```text
-target/surefire-reports/
-```
-
-Allure raw results are written to:
-
-```text
-allure-results/
-```
-
-Generate a local Allure HTML report:
-
-```bash
-./mvnw allure:report
-```
-
-## Jenkins
-
-The root `Jenkinsfile` provides a parameterized Java Selenium pipeline for local or SCM-based execution. It maps Jenkins parameters into the same keys used by `DataConfig.xml`, publishes JUnit-compatible Surefire results, writes Allure environment metadata, and archives `allure-results`.
-
-Recommended defaults for this project:
-
-- `TEST_SUITE=` to run all sanity tests
-- `PLATFORM_NAME=WEB`
-- `BROWSER_NAME=chrome`
-- `HEADLESS=true`
-- `BASE_URL=https://healyourrootswellness.com`
-
-Set `TEST_SUITE=SanityTest.ClientFlowTest` to run one class.
-
-## Notes
-
-- `Drivers/` is intentionally empty; place local machine-specific binaries there only when needed.
-- `ImageRepository/` is reserved for visual baselines.
-- `WorkFlows/` is reserved for future reusable business-level flows as the suite grows.
-- Known production issues are kept explicit in `Helpers.KnownProductionIssues`.
+`ANALYZE_FAILURES` is also false by default. To enable hosted analysis, create a separate Jenkins **Secret text** credential containing the OpenAI API key, normally with ID `openai-api-key`; set `OPENAI_API_KEY_CREDENTIAL_ID` if a different ID is used, and set `OPENAI_MODEL` to a model available to the account. Jenkins binds the key only around the analysis command, does not read the local `.env`, archives only sanitized analysis outputs, and preserves pytest's result even when analysis fails. Existing Jira publication remains independent and unchanged.

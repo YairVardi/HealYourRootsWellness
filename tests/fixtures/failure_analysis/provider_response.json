@@ -1,0 +1,23 @@
+{
+  "analyses": [
+    {
+      "test_identity": "tests.ui.test_example#test_heading_contract",
+      "category": "suspected_product_bug",
+      "evidence": [
+        "Expected heading 'Find care' but found 'Not Found' for [REDACTED_EMAIL]"
+      ],
+      "hypothesis": "Hypothesis: the page content may not satisfy the heading contract asserted by this test.",
+      "confidence": 0.72,
+      "unknowns": [
+        "Unknown: whether the route behavior is intentional.",
+        "Unknown: the root cause of the observed page content."
+      ],
+      "recommended_next_steps": [
+        "Verify the route and heading contract with the product owner.",
+        "Re-run the reported test identity against the same deployment."
+      ],
+      "proposed_jira_summary": "[Analysis][suspected_product_bug] test_heading_contract",
+      "proposed_jira_description": "Review-only hypothesis based on the selected JUnit report. The report states: Expected heading 'Find care' but found 'Not Found' for [REDACTED_EMAIL]. Root cause and intended route behavior are unknown."
+    }
+  ]
+}

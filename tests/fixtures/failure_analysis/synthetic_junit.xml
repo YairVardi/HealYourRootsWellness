@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="synthetic" tests="3" failures="2">
+    <testcase classname="tests.ui.test_example" name="test_heading_contract">
+      <failure type="AssertionError" message="Expected heading 'Find care' but found 'Not Found' for qa.patient@example.com">
+AssertionError: Expected heading 'Find care' but found 'Not Found'
+OPENAI_API_KEY=sk-synthetic-secret-1234567890
+phone=555-123-4567
+      </failure>
+    </testcase>
+    <testcase classname="tests.ui.test_example" name="test_resolved_known_issue">
+      <failure type="Failed" message="[XPASS(strict)] Known route currently returns 404" />
+    </testcase>
+    <testcase classname="tests.ui.test_example" name="test_passed" />
+  </testsuite>
+</testsuites>

@@ -1,17 +1,14 @@
-target/
-!.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-.kotlin
-node_modules/
+.venv/
+artifacts/
 playwright-report/
 test-results/
-blob-report/
-allure-results/*
-!allure-results/.gitkeep
+allure-results/
 allure-report/
+.pytest_cache/
 .allure/
 .env
+.env.*
+!.env.example
 
 ### IntelliJ IDEA ###
 .idea/
@@ -47,3 +44,10 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local Codex skills collection
+/awesome-codex-skills/
